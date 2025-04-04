@@ -13,7 +13,7 @@ Cette application implémente une API RESTful avec Flask et Neo4j pour gérer un
 
 1. **Cloner le dépôt ou télécharger les fichiers dans un répertoire**
    ```bash
-   git clone <URL_DU_DEPOT>
+   git clone git@github.com:Forantis/neo4j-project.git
    cd tp02
    ```
 
@@ -21,6 +21,11 @@ Cette application implémente une API RESTful avec Flask et Neo4j pour gérer un
    ```bash
    pip install -r requirements.txt
    ```
+
+(Attention: en cas de besoin il faut passer dans l'environnement Python avant le pip : )
+```bash
+   source ./bin/activate
+```
 
 3. **Démarrer Neo4j avec Docker**
    ```bash
@@ -32,7 +37,7 @@ Cette application implémente une API RESTful avec Flask et Neo4j pour gérer un
 
 4. **Lancer l'application Flask**
    ```bash
-   python app.py
+   flask --app app run
    ```
 
    L'API sera accessible à l'adresse suivante : [http://localhost:5000](http://localhost:5000)
