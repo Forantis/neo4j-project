@@ -24,9 +24,14 @@ class User:
         self.id = str(uuid.uuid4())
 
     def save(self):
-        # Vérifiez si l'utilisateur existe déjà
-        existing_user = User.find_by_id(self.id)
-        if (existing_user):
+        # Vérifiez si un utilisateur avec le même email existe déjà
+        existing_user = graph.evaluate("MATCH (u:User {email: $email}) RETURN u", email=self.email)
+        if existing_user:
+            raise ValueError(f"An account with email {self.email} already exists.")
+        
+        # Vérifiez si l'utilisateur existe déjà par ID
+        existing_user_by_id = User.find_by_id(self.id)
+        if existing_user_by_id:
             return self  # Ne recrée pas l'utilisateur s'il existe déjà
         
         # Crée un nouvel utilisateur si inexistant
@@ -66,10 +71,38 @@ class User:
     
     @staticmethod
     def delete(user_id):
-        # First delete all relationships
-        graph.run("MATCH (u:User {id: $id})-[r]-() DELETE r", id=user_id)
-        # Then delete the user node
-        graph.run("MATCH (u:User {id: $id}) DELETE u", id=user_id)
+        # Supprime les posts créés par l'utilisateur
+        graph.run("""
+        MATCH (u:User {id: $id})-[:CREATED]->(p:Post)
+        DETACH DELETE p
+        """, id=user_id)
+        
+        # Supprime les commentaires créés par l'utilisateur
+        graph.run("""
+        MATCH (u:User {id: $id})-[:CREATED]->(c:Comment)
+        DETACH DELETE c
+        """, id=user_id)
+        
+        # Supprime les likes de l'utilisateur sur les posts
+        graph.run("""
+        MATCH (u:User {id: $id})-[r:LIKES]->(p:Post)
+        DELETE r
+        """, id=user_id)
+        
+        # Supprime les likes de l'utilisateur sur les commentaires
+        graph.run("""
+        MATCH (u:User {id: $id})-[r:LIKES]->(c:Comment)
+        DELETE r
+        """, id=user_id)
+        
+        # Supprime toutes les relations d'amitié
+        graph.run("""
+        MATCH (u:User {id: $id})-[r:FRIENDS_WITH]-()
+        DELETE r
+        """, id=user_id)
+        
+        # Supprime le nœud utilisateur
+        graph.run("MATCH (u:User {id: $id}) DETACH DELETE u", id=user_id)
     
     @staticmethod
     def add_friend(user_id, friend_id):
@@ -223,18 +256,18 @@ class Comment:
                           content=self.content,
                           created_at=self.created_at)
         
-        # Find the user and post
-        user = User.find_by_id(self.user_id)
-        post = Post.find_by_id(self.post_id)
+        # Find the user and post as Neo4j nodes
+        user_node = graph.evaluate("MATCH (u:User {id: $id}) RETURN u", id=self.user_id)
+        post_node = graph.evaluate("MATCH (p:Post {id: $id}) RETURN p", id=self.post_id)
         
-        if not user:
+        if not user_node:
             raise ValueError(f"User with id {self.user_id} not found")
-        if not post:
+        if not post_node:
             raise ValueError(f"Post with id {self.post_id} not found")
         
         # Create relationships
-        created_rel = Relationship(user, "CREATED", comment_node)
-        has_comment_rel = Relationship(post, "HAS_COMMENT", comment_node)
+        created_rel = Relationship(user_node, "CREATED", comment_node)
+        has_comment_rel = Relationship(post_node, "HAS_COMMENT", comment_node)
         
         # Create everything in the database
         tx = graph.begin()

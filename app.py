@@ -52,6 +52,8 @@ def create_user():
     try:
         user = User(name=data['name'], email=data['email']).save()
         return jsonify(node_to_dict(user)), 201
+    except ValueError as ve:
+        return jsonify({"error": str(ve)}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -308,6 +310,34 @@ def get_comment(comment_id):
         return jsonify({"error": "Comment not found"}), 404
     return jsonify(node_to_dict(comment))
 
+@app.route("/comments/<comment_id>", methods=["PUT"])
+def update_comment(comment_id):
+    data = request.json
+    if not data or not data.get('content'):
+        return jsonify({"error": "Content is required"}), 400
+    
+    comment = Comment.find_by_id(comment_id)
+    if not comment:
+        return jsonify({"error": "Comment not found"}), 404
+    
+    try:
+        updated_comment = Comment.update(comment_id, content=data['content'])
+        return jsonify(node_to_dict(updated_comment))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/comments/<comment_id>", methods=["DELETE"])
+def delete_comment(comment_id):
+    comment = Comment.find_by_id(comment_id)
+    if not comment:
+        return jsonify({"error": "Comment not found"}), 404
+    
+    try:
+        Comment.delete(comment_id)
+        return jsonify({"message": "Comment deleted successfully"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route("/posts/<post_id>/comments", methods=["GET"])
 def get_post_comments(post_id):
     post = Post.find_by_id(post_id)
@@ -330,10 +360,60 @@ def create_comment(post_id):
     if not post:
         return jsonify({"error": "Post not found"}), 404
     
+    user = User.find_by_id(data['user_id'])
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    
     try:
+        # Crée un commentaire en utilisant les IDs utilisateur et post
         comment = Comment(content=data['content'],
-                         user_id=data['user_id'],
-                         post_id=post_id).save()
+                          user_id=data['user_id'],
+                          post_id=post_id).save()
         return jsonify(node_to_dict(comment)), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route("/comments/<comment_id>/like", methods=["POST"])
+def like_comment(comment_id):
+    data = request.json
+    if not data or not data.get('user_id'):
+        return jsonify({"error": "User ID required"}), 400
+    
+    user_id = data['user_id']
+    
+    comment = Comment.find_by_id(comment_id)
+    user = User.find_by_id(user_id)
+    
+    if not comment:
+        return jsonify({"error": "Comment not found"}), 404
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    
+    try:
+        Comment.add_like(comment_id, user_id)
+        return jsonify({"message": "Comment liked successfully"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/comments/<comment_id>/like", methods=["DELETE"])
+def unlike_comment(comment_id):
+    data = request.json
+    if not data or not data.get('user_id'):
+        return jsonify({"error": "User ID required"}), 400
+    
+    user_id = data['user_id']
+    
+    comment = Comment.find_by_id(comment_id)
+    user = User.find_by_id(user_id)
+    
+    if not comment:
+        return jsonify({"error": "Comment not found"}), 404
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    
+    try:
+        Comment.remove_like(comment_id, user_id)
+        return jsonify({"message": "Comment unliked successfully"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
